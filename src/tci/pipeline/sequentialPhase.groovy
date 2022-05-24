@@ -255,7 +255,7 @@ class sequentialPhase implements Serializable {
             if(overAllStatus=="SUCCESS") {
                 try {
                     def index = counter
-                    if(item.class.toString().contains('subJob')) {
+                    if(item instanceOf subJob) {
                         item.title = "[Phase-job #"+counter+"] "+item.blockName
                         if(item.alias != null && item.alias != "") {
                             item.title = "[Phase-job #"+counter+"] "+item.alias
@@ -272,7 +272,7 @@ class sequentialPhase implements Serializable {
                     item.url = ""
                     if(showStages) {
                         script.stage(title) {
-                            if(item.class.toString().contains('subJob')) {
+                            if(item instanceOf subJob) {
                                 runJob(item)
                             }
                             else {
@@ -281,7 +281,7 @@ class sequentialPhase implements Serializable {
                         }
                     }
                     else {
-                        if(item.class.toString().contains('subJob')) {
+                        if(item instanceOf subJob) {
                             runJob(item)
                         }
                         else {
@@ -305,7 +305,7 @@ class sequentialPhase implements Serializable {
                 if(item.propagate == false) {
                     currentStatus += " (propagate:false)"
                 }
-                if(item.class.toString().contains('subJob')) {
+                if(item instanceOf subJob) {
                     description += '\t'+item.title+' - '+currentStatus+' - '+item.url
                 }
                 else {
