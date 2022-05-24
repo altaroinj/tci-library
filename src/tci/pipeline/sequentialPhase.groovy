@@ -196,13 +196,14 @@ class sequentialPhase implements Serializable {
                     }
                 }
                 catch (error) {
-                    script.echo error.message
+                    script.echo "[ERROR] [runJob] "+error.message
                     item.status = "FAILURE"
                 }
             }
             setOverallStatusByItem(item)
         }
         catch (error) {
+            script.echo "[ERROR] [runJob] "+error.message
         }
         def timeStop = new Date()
         def duration = TimeCategory.minus(timeStop, timeStart)
@@ -226,7 +227,7 @@ class sequentialPhase implements Serializable {
                 count=item.retry
             }
             catch (error) {
-                script.echo error.message
+                script.echo "[ERROR] [runStepsSequence] "+error.message
                 item.status = "FAILURE"
             }
         }
@@ -253,44 +254,44 @@ class sequentialPhase implements Serializable {
         blocks.each { item ->
             if(overAllStatus=="SUCCESS") {
                 try {
-            def index = counter
-            if(item.class.toString().contains('subJob')) {
-                item.title = "[Phase-job #"+counter+"] "+item.blockName
-                if(item.alias != null && item.alias != "") {
-                    title = "[Phase-job #"+counter+"] "+item.alias
-                }
-            }
-            else {
-                item.title = "[Phase-sequence #"+counter+"] "+item.blockName
-                if(item.alias != null && item.alias != "") {
-                    title = "[Phase-sequence #"+counter+"] "+item.alias
-                }
-            }
-            def title = item.title
-            item.status = "SUCCESS"
-            item.url = ""
-            if(showStages) {
-                script.stage(title) {
+                    def index = counter
                     if(item.class.toString().contains('subJob')) {
-                        runJob(item)
+                        item.title = "[Phase-job #"+counter+"] "+item.blockName
+                        if(item.alias != null && item.alias != "") {
+                            item.title = "[Phase-job #"+counter+"] "+item.alias
+                        }
                     }
                     else {
-                        runStepsSequence(item)
+                        item.title = "[Phase-sequence #"+counter+"] "+item.blockName
+                        if(item.alias != null && item.alias != "") {
+                            item.title = "[Phase-sequence #"+counter+"] "+item.alias
+                        }
                     }
-                }
-            }
-            else {
-                if(item.class.toString().contains('subJob')) {
-                    runJob(item)
-                }
-                else {
-                    runStepsSequence(item)
-                }
-            }
-            counter++
+                    def title = item.title
+                    item.status = "SUCCESS"
+                    item.url = ""
+                    if(showStages) {
+                        script.stage(title) {
+                            if(item.class.toString().contains('subJob')) {
+                                runJob(item)
+                            }
+                            else {
+                                runStepsSequence(item)
+                            }
+                        }
+                    }
+                    else {
+                        if(item.class.toString().contains('subJob')) {
+                            runJob(item)
+                        }
+                        else {
+                            runStepsSequence(item)
+                        }
+                    }
+                    counter++
                 }
                 catch (error) {
-
+                    script.echo "[ERROR] [runImpl] "+error.message
                 }
             }
         }
@@ -328,9 +329,6 @@ class sequentialPhase implements Serializable {
                 if(overAllStatus=="ABORTED") {
                     statusColor="\033[1;90m"
                 }
-                else {
-
-                }
             }
         }
         description += "\n'\033[1;94m"+name+"\033[0m' sequential phase status: "+statusColor+overAllStatus+"\033[0m\n"
@@ -343,4 +341,3 @@ class sequentialPhase implements Serializable {
         }
     }
 }
-

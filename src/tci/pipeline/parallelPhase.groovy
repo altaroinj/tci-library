@@ -211,13 +211,15 @@ class parallelPhase implements Serializable {
                     }
                 }
                 catch (error) {
-                    script.echo error.message
+                    script.echo "[ERROR] [runJob] "+error.message
                     item.status = "FAILURE"
                 }
             }
             setOverallStatusByItem(item)
         }
         catch (error) {
+            script.echo "[ERROR] [runJob] "+error.message
+            item.status = "FAILURE"
         }
         def timeStop = new Date()
         def duration = TimeCategory.minus(timeStop, timeStart)
@@ -242,7 +244,7 @@ class parallelPhase implements Serializable {
                 count=item.retry
             }
             catch (error) {
-                script.echo error.message
+                script.echo "[ERROR] [runStepsSequence] "+error.message
                 item.status = "FAILURE"
             }
         }
@@ -317,6 +319,7 @@ class parallelPhase implements Serializable {
             script.parallel parallelBlocks
         }
         catch (error) {
+            script.echo "[ERROR] [runImpl] "+error.message
         }
 
         description = "\033[1;94m"+name+'\033[0m\n\n\033[1;92mRun in parallel:\033[0m\n'
@@ -370,9 +373,6 @@ class parallelPhase implements Serializable {
                 if(overAllStatus=="ABORTED") {
                     statusColor="\033[1;90m"
                 }
-                else {
-
-                }
             }
         }
         description += "\n'\033[1;94m"+name+"\033[0m' parallel phase status: "+statusColor+overAllStatus+"\033[0m\n"
@@ -388,4 +388,3 @@ class parallelPhase implements Serializable {
         }
     }
 }
-
