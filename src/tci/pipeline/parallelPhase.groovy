@@ -16,14 +16,17 @@ class parallelPhase implements Serializable {
         def duration = null
         String title
         String alias
+        int logLinesNumber
+        List<String> logLines
 
-        subJob(String blockName, def parameters, boolean propagate, boolean wait, int retry, String alias ) {
+        subJob(String blockName, def parameters, boolean propagate, boolean wait, int retry, String alias, int logLinesNumber) {
             this.blockName = blockName
             this.parameters = parameters
             this.propagate = propagate
             this.wait = wait
             this.retry = retry
             this.alias = alias
+            this.logLinesNumber = logLinesNumber
         }
     }
 
@@ -40,7 +43,7 @@ class parallelPhase implements Serializable {
         String title
         String alias
 
-        stepsSequence(String blockName, def sequence, boolean propagate, int retry, String alias ) {
+        stepsSequence(String blockName, def sequence, boolean propagate, int retry, String alias) {
             this.blockName = blockName
             this.sequence = sequence
             this.propagate = propagate
@@ -115,8 +118,11 @@ class parallelPhase implements Serializable {
         if (config.alias == null) {
             config.alias = ""
         }
+        if (config.logLinesNumber == null) {
+            config.logLinesNumber = 0
+        }
 
-        def job = new subJob(config.job, config.parameters, config.propagate, config.wait, config.retry, config.alias)
+        def job = new subJob(config.job, config.parameters, config.propagate, config.wait, config.retry, config.alias, config.logLinesNumber)
         jobs << job
     }
 
@@ -167,6 +173,17 @@ class parallelPhase implements Serializable {
         }
     }
 
+    @NonCPS
+    def getBuildLog(def build, int logLinesNumber) {
+        try {
+            return build.getRawBuild().getLog(logLinesNumber)
+        }
+        catch (error) {
+            script.echo "[ERROR] [getBuildLog] "+error.message
+            return []
+        }
+    }
+
     def setOverallStatusByItem(def item) {
         if(item.propagate == true) {
             if(item.status == "FAILURE") {
@@ -203,11 +220,10 @@ class parallelPhase implements Serializable {
                     if(currentRun!=null) {
                         item.status = getBuildResult(currentRun)
                         item.url = getBuildUrl(currentRun)
+                        item.logLines = getBuildLog(currentRun, item.logLinesNumber)
                     }
                     if(item.status=="SUCCESS" || item.status=="ABORTED") {
                         count=item.retry
-                    }
-                    else {
                     }
                 }
                 catch (error) {
@@ -224,8 +240,15 @@ class parallelPhase implements Serializable {
         def timeStop = new Date()
         def duration = TimeCategory.minus(timeStop, timeStart)
         item.duration = duration.toString()
-        def currentStatusColor=(item.status=="SUCCESS")?'\033[1;94m':'\033[1;91m'
-        script.echo(" '\033[1;94m${item.title}\033[0m' (${item.url}) ended with ${currentStatusColor}${item.status}\033[0m status. Duration: \033[1;94m${duration}\033[0m")
+        def currentStatusColor= item.status=="SUCCESS" ? "\033[1;92m": item.status=="UNSTABLE" ? "\033[38;5;208m" : item.status=="ABORTED" ? "\033[1;90m" : "\033[1;91m"
+        def jobOutput = " '\033[1;94m${item.title}\033[0m' (${item.url}) ended with ${currentStatusColor}${item.status}\033[0m status. Duration: \033[1;94m${duration}\033[0m"
+        if (item.logLines!=null && item.logLines.size()>1) {
+            jobOutput += "\n Job output (last ${item.logLinesNumber} lines) :"
+            item.logLines.each { logLine ->
+                jobOutput += "\n     " + logLine
+            }
+        }
+        script.echo(jobOutput)
         if(item.status!="SUCCESS") {
             throw new Exception()
         }
@@ -252,7 +275,8 @@ class parallelPhase implements Serializable {
         def timeStop = new Date()
         def duration = TimeCategory.minus(timeStop, timeStart)
         item.duration = duration.toString()
-        script.tciLogger.info(" '\033[1;94m${item.title}\033[0m' ended with \033[1;94m${item.status}\033[0m status. Duration: \033[1;94m${duration}\033[0m")
+        def currentStatusColor= item.status=="SUCCESS" ? "\033[1;92m": item.status=="UNSTABLE" ? "\033[38;5;208m" : item.status=="ABORTED" ? "\033[1;90m" : "\033[1;91m"
+        script.tciLogger.info(" '\033[1;94m${item.title}\033[0m' ended with ${currentStatusColor}${item.status}\033[0m status. Duration: \033[1;94m${duration}\033[0m")
     }
 
     void run() {
@@ -319,15 +343,17 @@ class parallelPhase implements Serializable {
             script.parallel parallelBlocks
         }
         catch (error) {
-            script.echo "[ERROR] [runImpl] "+error.message
+            if (error.message!=null) {
+                script.echo "[ERROR] [runImpl] "+error.message
+            }
         }
 
         description = "\033[1;94m"+name+'\033[0m\n\n\033[1;92mRun in parallel:\033[0m\n'
-        def currentFailuesDescription = "\033[1;91mFailed:\033[0m\n'"
+        def currentFailuresDescription = "\033[1;91mUnsuccessful:\033[0m\n"
         boolean failedSteps = false
         jobs.each { item ->
             def currentDescription = ""
-            def currentStatusColor=(item.status=="SUCCESS")?'\033[1m':'\033[1;91m'
+            def currentStatusColor= item.status=="SUCCESS" ? "\033[1;92m": item.status=="UNSTABLE" ? "\033[38;5;208m" : item.status=="ABORTED" ? "\033[1;90m" : "\033[1;91m"
             def currentStatus = currentStatusColor+item.status+'\033[0m'
             if(item.propagate == false) {
                 currentStatus += " (propagate:false)"
@@ -340,12 +366,12 @@ class parallelPhase implements Serializable {
             description+=currentDescription
             if(item.status!="SUCCESS") {
                 failedSteps = true
-                currentFailuesDescription+=currentDescription
+                currentFailuresDescription+=currentDescription
             }
         }
         stepsSequences.each { item ->
             def currentDescription = ""
-            def currentStatusColor=(item.status=="SUCCESS")?'\033[1m':'\033[1;91m'
+            def currentStatusColor= item.status=="SUCCESS" ? "\033[1;92m": item.status=="UNSTABLE" ? "\033[38;5;208m" : item.status=="ABORTED" ? "\033[1;90m" : "\033[1;91m"
             def currentStatus = currentStatusColor+item.status+'\033[0m'
             if(item.propagate == false) {
                 currentStatus += " (propagate:false)"
@@ -358,26 +384,13 @@ class parallelPhase implements Serializable {
             description+=currentDescription
             if(item.status!="SUCCESS") {
                 failedSteps = true
-                currentFailuesDescription+=currentDescription
+                currentFailuresDescription+=currentDescription
             }
         }
-        String statusColor="\033[1;92m"
-        if(overAllStatus=="FAILURE") {
-            statusColor="\033[1;91m"
-        }
-        else {
-            if(overAllStatus=="UNSTABLE") {
-                statusColor="\033[0;103m"
-            }
-            else {
-                if(overAllStatus=="ABORTED") {
-                    statusColor="\033[1;90m"
-                }
-            }
-        }
+        String statusColor= overAllStatus=="SUCCESS" ? "\033[1;92m": overAllStatus=="UNSTABLE" ? "\033[38;5;208m" : overAllStatus=="ABORTED" ? "\033[1;90m" : "\033[1;91m"
         description += "\n'\033[1;94m"+name+"\033[0m' parallel phase status: "+statusColor+overAllStatus+"\033[0m\n"
         if(failedSteps) {
-            description += "\n"+currentFailuesDescription
+            description += "\n"+currentFailuresDescription
         }
         script.echo description
         if(failOnError) {
